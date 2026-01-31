@@ -60,8 +60,9 @@ export default function BusCard({ bus }: { bus: any }) {
         const baseFactor = bus.currentStatus.delayFactor || 1.0;
 
         // 2. Segment "Noise" (Simulate traffic at different parts of city)
-        // Use char code of stop name to make it consistent for that stop
-        const stopSeed = stop.name.charCodeAt(0) + idx;
+        // Use char code of stop name + busId to make it unique per bus
+        const busSeed = bus.busId.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+        const stopSeed = stop.name.charCodeAt(0) + idx + busSeed;
         const trafficVariance = 0.8 + (pseudoRandom(stopSeed) * 0.4); // Random between 0.8x (Fast) and 1.2x (Slow)
 
         // 3. Combined Segment Time

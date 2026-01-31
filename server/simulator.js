@@ -290,19 +290,24 @@ function moveBus(bus, route) {
         fuelLevel: Number(fuelLevel),
         occupancy: Number(occupancy),
         lastUpdated: lastUpdated, // Schema requires Date
-        currentStopIndex: Number(currentStopIndex),
-        progressToNext: Number(progressToNext),
-        nextStop: nextStopObj ? nextStopObj.name : "Terminating",
-        nextStop: nextStopObj ? nextStopObj.name : "Terminating",
         etaNextStop: `${Math.ceil((1 - progressToNext) * 10 * delayFactor)} mins`,
         totalDistCovered,
         delayFactor
     };
 }
 
-async function runSimulation() {
-    console.log('Starting IoT Simulation...');
-    // await mongoose.connect(process.env.MONGO_URI); // REMOVED: Reuse server connection
+// Helper to generate consistent random numbers based on seed (busId)
+const pseudoRandom = (input) => {
+    let t = input += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+
+const runSimulation = async () => {
+    console.log("Starting IoT Digital Twin Simulation (Real-Time Geometry Mode)...");
+
+    // Initialize Database with Buses/Routes
     await seedData();
 
     setInterval(async () => {
@@ -313,31 +318,119 @@ async function runSimulation() {
             const route = routes.find(r => r.routeId === bus.routeId);
             if (!route) continue;
 
-            const newStatus = moveBus(bus, route);
+            // 1. Assign a "Personality" profile based on Bus ID hash
+            const seed = bus.busId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            const profileType = seed % 3;
 
-            // 1. Update Live Status
-            bus.currentStatus = newStatus;
+            // Use time to create waves (sine wave) for smooth transitions
+            const timeFactor = Date.now() / 10000;
+            const uniqueOffset = seed * 100;
+
+            let speed, engineTemp, vibration, fuelEfficiency;
+
+            if (profileType === 0) {
+                // PROFILE: HIGHWAY EXPRESS (High Speed, Stable)
+                const baseSpeed = 40 + Math.sin(timeFactor + uniqueOffset) * 5; // 35-45 km/h
+                speed = Math.max(30, Math.min(60, baseSpeed + (Math.random() * 5)));
+                engineTemp = 80 + (speed * 0.1) + (Math.random() * 2);
+                vibration = 2 + (speed * 0.05);
+            } else if (profileType === 1) {
+                // PROFILE: CITY TRAFFIC (Stop & Go, Fluctuating)
+                const cycle = Math.sin((timeFactor * 3) + uniqueOffset);
+                speed = cycle > 0.5 ? (20 + Math.random() * 10) : (Math.random() * 5);
+                engineTemp = 85 + (Math.random() * 5);
+                vibration = 1 + (Math.random() * 1);
+            } else {
+                // PROFILE: MODERATE
+                speed = 30 + Math.sin(timeFactor + uniqueOffset) * 3;
+                engineTemp = 82 + (Math.random() * 3);
+                vibration = 3 + (Math.random() * 2);
+            }
+
+            // 2. CALCULATE PROGRESS / DISTANCE
+            // Assuming 3 second ticks
+            const distIncrement = speed * (3 / 3600); // dist in km
+            let totalDist = (bus.currentStatus.totalDistCovered || 0) + distIncrement;
+
+            // Route Length logic
+            const totalRouteKm = route.totalDistanceKm || 20;
+            if (totalDist > totalRouteKm) totalDist = 0; // Return to start
+
+            // 3. MAP DISTANCE TO GPS COORDINATES
+            // We need to find which segment the bus is in
+            let accumulatedDist = 0;
+            let currentLat = route.stops[0].lat;
+            let currentLng = route.stops[0].lng;
+            let currentStopIdx = 0;
+            let nextStopName = route.stops[1]?.name || 'Terminus';
+
+            for (let i = 0; i < route.stops.length - 1; i++) {
+                const s1 = route.stops[i];
+                const s2 = route.stops[i + 1];
+
+                // Estimate segment distance based on scheduled time (5 mins ~ 2km for demo)
+                const segmentDist = (s2.scheduledTimeOffsetMinutes - s1.scheduledTimeOffsetMinutes) * (totalRouteKm / Math.max(1, route.stops[route.stops.length - 1].scheduledTimeOffsetMinutes));
+
+                if (totalDist >= accumulatedDist && totalDist <= accumulatedDist + segmentDist) {
+                    // Bus is between s1 and s2
+                    const segmentProgress = (totalDist - accumulatedDist) / segmentDist;
+                    currentLat = s1.lat + (s2.lat - s1.lat) * segmentProgress;
+                    currentLng = s1.lng + (s2.lng - s1.lng) * segmentProgress;
+                    currentStopIdx = i;
+                    nextStopName = s2.name;
+                    break;
+                }
+                accumulatedDist += segmentDist;
+            }
+
+            // 4. CALCULATE SCHEDULE DEVIATION
+            // Consistent randomness per bus for "AI Prediction"
+            const delayFactor = 0.85 + ((seed % 40) / 100) + (Math.sin(timeFactor) * 0.05);
+            const scheduledDist = totalDist * (1 / delayFactor);
+
+            // 5. ESTIMATE ETA TO NEXT STOP
+            // Segment progress = (totalDist - accumulatedDist) / segmentDist
+            // Remaining segment dist = segmentDist - (totalDist - accumulatedDist)
+            // Time = Remaining Dist / Speed
+            const currentSegmentProgress = (totalDist - accumulatedDist);
+            const segmentDist = (route.totalDistanceKm / route.stops.length); // Simplified for ETA
+            const remainingDist = Math.max(0.1, segmentDist - currentSegmentProgress);
+            const etaMins = Math.ceil((remainingDist / Math.max(5, speed)) * 60 * delayFactor);
+
+            // Update Bus Current Status
+            bus.currentStatus = {
+                ...bus.currentStatus,
+                lat: currentLat,
+                lng: currentLng,
+                speed: parseFloat(speed.toFixed(1)),
+                engineTemp: parseFloat(engineTemp.toFixed(1)),
+                fuelLevel: Math.max(5, bus.currentStatus.fuelLevel - 0.01),
+                totalDistCovered: totalDist,
+                currentStopIndex: currentStopIdx,
+                nextStop: nextStopName,
+                etaNextStop: `${etaMins} mins`,
+                delayFactor: delayFactor,
+                lastUpdated: new Date()
+            };
             await bus.save();
 
-            // 2. Log History for Digital Twin Graph
-            // We calculate "progress" as simple distance from start for now
-            // ideally verify using Haversine formula
+            // Log History for Graph
             await TripLog.create({
                 busId: bus.busId,
                 routeId: bus.routeId,
-                lat: newStatus.lat,
-                lng: newStatus.lng,
-                speed: newStatus.speed,
-                fuelLevel: newStatus.fuelLevel,
-                occupancy: newStatus.occupancy,
-                // REAL DATA for Graph
-                progressDistanceKm: newStatus.totalDistCovered,
-                // Scheduled is "Ideal" (so if delayFactor is 1.2 (slow), covered < scheduled)
-                scheduledProgressDistanceKm: newStatus.totalDistCovered * (newStatus.delayFactor || 1)
+                timestamp: new Date(),
+                speed: speed,
+                engineTemp: engineTemp,
+                fuelLevel: bus.currentStatus.fuelLevel,
+                vibrationLevel: vibration,
+                lat: currentLat,
+                lng: currentLng,
+                progressDistanceKm: totalDist,
+                scheduledProgressDistanceKm: scheduledDist
             });
         }
-    }, UPDATE_INTERVAL_MS);
-}
+    }, 3000);
+};
 
 // If run directly
 if (require.main === module) {

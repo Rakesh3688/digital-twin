@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { X, Check, Armchair, User } from "lucide-react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 interface Seat {
     number: number;
@@ -19,7 +20,7 @@ export default function SeatSelectionModal({ busId, onClose, onProceed }: { busI
     useEffect(() => {
         const fetchSeats = async () => {
             try {
-                const res = await axios.get(`http://localhost:5000/api/buses/${busId}/seats`);
+                const res = await axios.get(`http://localhost:5001/api/buses/${busId}/seats`);
                 setSeats(res.data.seats);
             } catch (err) {
                 console.error("Failed to load seats", err);
@@ -37,8 +38,8 @@ export default function SeatSelectionModal({ busId, onClose, onProceed }: { busI
         if (selectedSeats.includes(seatNumber)) {
             setSelectedSeats(selectedSeats.filter(s => s !== seatNumber));
         } else {
-            // Allow max 1 for this demo, or remove check for multiple
-            setSelectedSeats([seatNumber]);
+            // Allow multiple selections
+            setSelectedSeats([...selectedSeats, seatNumber]);
         }
     };
 
@@ -52,7 +53,7 @@ export default function SeatSelectionModal({ busId, onClose, onProceed }: { busI
                 {/* Header */}
                 <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                        <Armchair className="w-5 h-5 text-cyan-400" /> Select Your Seat
+                        <Armchair className="w-5 h-5 text-cyan-400" /> Select Your Seats
                     </h3>
                     <button onClick={onClose} className="p-1 hover:bg-slate-700 rounded-full transition">
                         <X className="w-5 h-5 text-gray-400" />
@@ -110,7 +111,9 @@ export default function SeatSelectionModal({ busId, onClose, onProceed }: { busI
                                 onClick={() => onProceed(selectedSeats)}
                                 className="w-full py-3 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 disabled:text-gray-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-cyan-900/20 flex items-center justify-center gap-2"
                             >
-                                {selectedSeats.length > 0 ? `Proceed to Pay (₹${selectedSeats.length * 50})` : 'Select a Seat'}
+                                {selectedSeats.length > 0
+                                    ? `Proceed to Pay ₹${selectedSeats.length * 50} (${selectedSeats.length} ${selectedSeats.length === 1 ? 'Seat' : 'Seats'})`
+                                    : 'Select Seats'}
                             </button>
                         </div>
                     )}
@@ -131,18 +134,25 @@ function SeatIcon({ seat, isSelected, onToggle }: { seat: Seat, isSelected: bool
             onClick={() => onToggle(seat.number)}
             disabled={!isAvailable}
             className={`
-                relative w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-300 border
+                relative w-12 h-12 rounded-lg flex items-center justify-center transition-all duration-300 border
                 ${isSelected
-                    ? "bg-cyan-500 border-cyan-400 text-white shadow-[0_0_10px_rgba(6,182,212,0.5)] scale-110 z-10"
+                    ? "bg-cyan-500 border-cyan-400 text-white shadow-[0_0_15px_rgba(6,182,212,0.5)] scale-110 z-10"
                     : isOccupied
                         ? "bg-red-500/10 border-red-500/30 text-red-500/50 cursor-not-allowed"
-                        : "bg-slate-800 border-slate-700 text-slate-500 hover:border-slate-500 hover:bg-slate-700"
+                        : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500 hover:bg-slate-700"
                 }
             `}
         >
-            <Armchair className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 text-[8px] font-mono opacity-50">{seat.number}</span>
-            {isOccupied && <User className="w-3 h-3 absolute" />}
+            <div className="flex flex-col items-center justify-center">
+                <Armchair className={cn("w-5 h-5", isOccupied ? "opacity-30" : "opacity-100")} />
+                <span className={cn(
+                    "text-[10px] font-bold font-mono tracking-tighter -mt-1",
+                    isSelected ? "text-white" : isOccupied ? "text-red-500/40" : "text-slate-300"
+                )}>
+                    {seat.number}
+                </span>
+            </div>
+            {isOccupied && <User className="w-3 h-3 absolute top-1 right-1 opacity-40" />}
         </button>
     );
 }

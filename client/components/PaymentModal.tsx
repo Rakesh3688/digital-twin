@@ -25,7 +25,7 @@ export default function PaymentModal({ bus, selectedSeats, onClose, onComplete }
         await new Promise(r => setTimeout(r, 2000));
 
         try {
-            const res = await axios.post("http://localhost:5000/api/bookings", {
+            const res = await axios.post("http://localhost:5001/api/bookings", {
                 busId: bus.busId,
                 seatNumbers: selectedSeats,
                 customerName: name || "Guest User",
@@ -204,7 +204,7 @@ export default function PaymentModal({ bus, selectedSeats, onClose, onComplete }
                                 {method === 'QR' && (
                                     <div className="text-center animate-in fade-in slide-in-from-right-4 duration-300">
                                         <div className="bg-white p-2 rounded-lg inline-block mx-auto mb-2">
-                                            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=upi://pay?pa=mock@upi&pn=CityTransit&am=${amount}`} alt="QR" className="w-24 h-24" />
+                                            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=upi://pay?pa=mock@upi&pn=ExcelBus&am=${amount}`} alt="QR" className="w-24 h-24" />
                                         </div>
                                         <p className="text-[10px] text-cyan-400 animate-pulse">Scan with any UPI App to Pay</p>
                                     </div>

@@ -18,6 +18,9 @@ const BusSchema = new mongoose.Schema({
         etaNextStop: String,
         currentStopIndex: { type: Number, default: 0 },
         progressToNext: { type: Number, default: 0 },
+        totalDistCovered: { type: Number, default: 0 }, // Distance from start of route
+        delayFactor: { type: Number, default: 1.0 },    // AI-predicted delay multiplier
+        engineTemp: Number,
         lastUpdated: { type: Date, default: Date.now }
     }
 });

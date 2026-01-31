@@ -234,17 +234,45 @@ app.post('/api/bookings', async (req, res) => {
     }
 });
 
+// 4. Get All Bookings (For Manage Booking)
+app.get('/api/bookings', async (req, res) => {
+    try {
+        const bookings = await Booking.find().sort({ createdAt: -1 });
+        res.json(bookings);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 5. User Login (Mock)
+app.post('/api/login', async (req, res) => {
+    // ... (unchanged)
+    try {
+        console.log(`Login Request received: ${JSON.stringify(req.body)}`);
+        const { phone, otp } = req.body;
+        // In a real app, verify OTP here.
+        // For demo, accept any phone and mock user.
+        res.json({
+            success: true,
+            user: {
+                name: 'Rakesh Yanamala',
+                phone: phone,
+                avatar: 'https://ui-avatars.com/api/?name=Rakesh+Y&background=d90429&color=fff'
+            },
+            token: 'mock-jwt-token-123'
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Main Execution
-const PORT = process.env.PORT || 5000;
+const PORT = 5001; // HARDCODED TO FIX NETWORK ERROR
 
 const startServer = async () => {
     try {
+        // ... (mongo connection)
         let mongoUri = process.env.MONGO_URI;
-
-        // Fallback to In-Memory MongoDB if local is not available or typically for this demo
-        // We will try to connect to the provided URI first, but for this specific "fix" request
-        // we will prioritize the In-Memory server since the user definitely doesn't have Mongo running.
-        // actually, let's just use InMemory for the demo to be safe and self-contained.
         const { MongoMemoryServer } = require('mongodb-memory-server');
         const mongod = await MongoMemoryServer.create();
         mongoUri = mongod.getUri();
@@ -256,8 +284,14 @@ const startServer = async () => {
         // Start the IoT Simulation
         runSimulation();
 
+        // Log all requests
+        app.use((req, res, next) => {
+            console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+            next();
+        });
+
         app.listen(PORT, () => {
-            console.log(`Server running on port ${PORT}`);
+            console.log(`Server running on port ${PORT} (EXCEL BUS VERSION)`);
         });
     } catch (err) {
         console.error('Failed to start server:', err);

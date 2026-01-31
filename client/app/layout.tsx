@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "City Transit Digital Twin",
+  title: "Excel Bus Transit - Digital Twin",
   description: "Real-time bus tracking and digital twin optimization",
 };
 
